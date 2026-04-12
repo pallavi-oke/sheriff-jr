@@ -1,6 +1,8 @@
 # Sheriff Jr. — An agentic ad compliance reviewer built with Claude
 
-![Sheriff Jr. demo](docs/demo_sheriff_jr.gif)
+![Sheriff Jr. demo single ad mode](docs/demo_sheriff_jr.gif)
+![Sheriff Jr. demo batch mode](docs/demo_sheriff_batch.gif)
+
 
 ---
 
