@@ -1,50 +1,22 @@
-# Sheriff Jr.
+# Sheriff Jr. — An agentic ad compliance reviewer built with Claude
 
-An agentic CLI tool that reviews Google Ads and Microsoft Advertising copy, keywords, and landing pages for policy violations. Powered by Claude's tool-use capability — the agent fetches the actual policy documents at review time rather than relying on static knowledge.
+![Sheriff Jr. demo](docs/demo_sheriff_jr.gif)
 
-## Features
+---
 
-- Reviews ad copy, keywords, and landing page URLs — any combination
-- Fetches all six Google and Microsoft ad policies on every run
-- Returns structured JSON: verdict, per-issue severity, offending text, and a suggested rewrite
-- Color-coded terminal output via `rich`
-- **Batch mode**: review an entire CSV campaign export in one command
+## The Problem
 
-## Setup
+Performance marketing teams bid on thousands of keywords daily — each one needs to be vetted against Google Ads and Microsoft Advertising policies that change without notice and differ across content categories. Manual review is slow, inconsistent, and impossible to scale. A keyword that was clean last quarter can become a policy violation today, and a disapproved ad wastes budget and tanks Quality Score while you wait for a human reviewer to tell you why.
 
-```bash
-# 1. Clone and enter the repo
-git clone https://github.com/your-org/sheriff-jr.git
-cd sheriff-jr
+Sheriff Jr. is the tool I built to automate that loop: give it an ad, a keyword, or a landing page URL, and it reads the actual current policy documents before deciding whether there's a problem.
 
-# 2. Install dependencies
-pip install -r requirements.txt
+---
 
-# 3. Add your Anthropic API key
-echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
-```
-
-## Single-ad review (`check`)
-
-```bash
-python main.py check --ad "Affordable car insurance quotes in your area"
-
-python main.py check \
-  --keyword "payday loans" \
-  --landing-page https://example.com
-
-python main.py check \
-  --ad "Best deals on prescription meds" \
-  --keyword "buy xanax" \
-  --landing-page https://example.com
-
-# Raw JSON output (pipe-friendly)
-python main.py check --ad "Lose 30 lbs in 30 days, guaranteed!" --json-out
-```
-
-The agent prints each tool call as it runs so you can watch it reason:
+## Demo
 
 ```
+$ python main.py check --ad "Lose 30 pounds in 30 days, guaranteed!"
+
 Running compliance review…
 
 [tool] fetch_policy_page(policy_name='google-prohibited-content')
@@ -54,101 +26,200 @@ Running compliance review…
 [tool] fetch_policy_page(policy_name='microsoft-disallowed-content')
 [tool] fetch_policy_page(policy_name='microsoft-relevance-quality')
 
-╭────────────────── Sheriff Jr. Compliance Report ──────────────────╮
-│ LIKELY VIOLATION                                                   │
-│ Ad makes an unrealistic weight-loss claim with an unsubstantiated  │
-│ guarantee, violating Google editorial and Microsoft quality rules. │
-╰────────────────────────────────────────────────────────────────────╯
+╭──────────────────── Sheriff Jr. Compliance Report ────────────────────╮
+│ LIKELY VIOLATION                                                       │
+│ Ad makes an unrealistic weight-loss claim with an unsubstantiated      │
+│ guarantee, violating Google editorial and Microsoft quality rules.     │
+╰────────────────────────────────────────────────────────────────────────╯
+
+  3 issue(s) found
+  ┌─────────────────────────────┬──────────────────────────────┬──────┐
+  │ Policy                      │ Offending Text               │ Sev. │
+  ├─────────────────────────────┼──────────────────────────────┼──────┤
+  │ google-editorial            │ Lose 30 pounds in 30 days,   │ HIGH │
+  │                             │ guaranteed!                  │      │
+  ├─────────────────────────────┼──────────────────────────────┼──────┤
+  │ microsoft-relevance-quality │ guaranteed!                  │ HIGH │
+  ├─────────────────────────────┼──────────────────────────────┼──────┤
+  │ google-restricted-content   │ Lose 30 pounds in 30 days    │  MED │
+  └─────────────────────────────┴──────────────────────────────┴──────┘
 ```
 
-## Batch review (`batch`)
+---
 
-Process a CSV file containing multiple ads in one command. Input columns: `ad`, `keyword`, `landing_page` (any may be empty per row).
+## What Sheriff Does
+
+- Reviews ad copy, keywords, and landing page URLs — any combination of the three
+- Fetches all six Google Ads and Microsoft Advertising policy documents on every run — never relies on cached or stale knowledge
+- Returns a structured verdict (`clean` / `at_risk` / `likely_violation`) with per-issue severity, the exact offending text, and a ready-to-paste suggested rewrite
+- Supports **batch CSV processing** — review an entire campaign export in one command with a live progress bar and summary counts
+- Color-coded terminal output: red for violations, yellow for at-risk, green for clean
+
+---
+
+## How It Works
+
+```
+┌─────────────────┐     ┌──────────────────────────────────┐     ┌──────────────────┐
+│   CLI (Click)   │────▶│          Agent Loop              │────▶│      Tools       │
+│                 │     │                                  │     │                  │
+│  --ad           │     │  1. Build user message           │     │ fetch_policy_page│
+│  --keyword      │     │  2. POST to Claude API           │◀───▶│   (6 policies)   │
+│  --landing-page │     │  3. On tool_use: dispatch        │     │                  │
+│  --json-out     │     │     tool, append result          │     │ fetch_url        │
+│                 │     │  4. On end_turn: parse JSON       │     │  (landing pages) │
+│  batch --input  │     │  5. Return structured dict       │     │                  │
+└─────────────────┘     └──────────────────────────────────┘     └──────────────────┘
+                                        ▲
+                                        │  Claude API
+                                        │  tool-use loop
+                                        ▼
+                              claude-sonnet-4-5
+```
+
+The agent loop is the core of the project. On each iteration, Claude either requests a tool call (fetching a policy page or a landing page) or returns a final answer. The loop dispatches tool calls, feeds results back, and continues until Claude signals `end_turn` with a structured JSON verdict. A cap of 10 iterations prevents runaway agents.
+
+The key design constraint: Claude is instructed — via the system prompt — to always call `fetch_policy_page` for all six policies before rendering a judgment, and to always call `fetch_url` if a landing page is given. This means the agent reasons over current policy text, not training-data snapshots.
+
+---
+
+## Quickstart
 
 ```bash
-python main.py batch \
-  --input examples/sample_ads.csv \
-  --output results.csv
+# 1. Clone and install
+git clone https://github.com/pallavi-oke/sheriff-jr.git
+cd sheriff-jr
+pip install -r requirements.txt
 
-# Dry-run with just the first 3 rows
-python main.py batch \
-  --input examples/sample_ads.csv \
-  --output results.csv \
-  --limit 3
+# 2. Add your Anthropic API key
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+
+# 3. Review an ad
+python main.py check --ad "Best weight loss supplement — doctors hate this trick"
 ```
 
-A progress bar tracks each review in real time. When complete, Sheriff prints a summary:
+---
 
+## Example Runs
+
+### Clean
+
+```bash
+$ python main.py check --ad "Try ProjectFlow — project management for modern teams" \
+    --keyword "project flow" --json-out
 ```
-╭───────────────── Batch Complete ─────────────────╮
-│ Processed 10 ad(s):                              │
-│   4 CLEAN                                        │
-│   3 AT RISK                                      │
-│   3 LIKELY VIOLATION                             │
-│                                                  │
-│ Results written to results.csv                   │
-╰──────────────────────────────────────────────────╯
-```
-
-### Output CSV columns
-
-| Column | Description |
-|---|---|
-| `ad` | Original ad text |
-| `keyword` | Original keyword |
-| `landing_page` | Original URL |
-| `verdict` | `clean` / `at_risk` / `likely_violation` |
-| `summary` | One-sentence plain-English verdict |
-| `issue_count` | Number of issues found |
-| `issues_json` | Full issues list serialized as JSON |
-| `error` | Error message if the review call failed; empty otherwise |
-
-### Sample input
-
-See [`examples/sample_ads.csv`](examples/sample_ads.csv) for a starter set that covers the full verdict range:
-
-| Ad | Expected verdict |
-|---|---|
-| Affordable car insurance quotes in your area | at_risk |
-| Try ProjectFlow — project management for modern teams | clean |
-| Lose 30 pounds in 30 days, guaranteed! | likely_violation |
-| Best weight loss supplement — doctors hate this trick | likely_violation |
-| Low-rate personal loans, apply in minutes | at_risk |
-| Buy cheap Xanax without a prescription — shipped overnight | likely_violation |
-| Get authentic designer handbags at 90% off — limited stock | likely_violation |
-| Open a high-yield savings account today — 5% APY, FDIC insured | clean |
-| Earn $5,000 a week from home — guaranteed, no experience needed | likely_violation |
-| Cloud storage for your business — 1 TB free, no credit card required | clean |
-
-## Output schema
 
 ```json
 {
-  "overall_verdict": "clean" | "at_risk" | "likely_violation",
-  "summary": "One-sentence plain-English verdict.",
+  "overall_verdict": "clean",
+  "summary": "Ad copy is compliant with Google Ads and Microsoft Advertising policies; project management software is clearly described with no prohibited or restricted content.",
+  "issues": []
+}
+```
+
+### At Risk
+
+```bash
+$ python main.py check --ad "Open a high-yield savings account today — 5% APY, FDIC insured" \
+    --json-out
+```
+
+```json
+{
+  "overall_verdict": "at_risk",
+  "summary": "Financial services ad with rate claim requires landing page verification to ensure all regulatory disclosures are present and APY is accurate.",
   "issues": [
     {
+      "policy": "google-restricted-content",
+      "offending_text": "5% APY",
+      "severity": "medium",
+      "explanation": "Financial product rate claims must match landing page exactly and comply with country-specific disclosure requirements.",
+      "suggested_rewrite": "High-yield savings account — competitive rates, FDIC insured (add disclaimer on landing page)"
+    },
+    {
       "policy": "google-editorial",
-      "offending_text": "the exact problematic text",
-      "severity": "high" | "medium" | "low",
-      "explanation": "One sentence.",
-      "suggested_rewrite": "A compliant alternative ready to paste."
+      "offending_text": "5% APY",
+      "severity": "medium",
+      "explanation": "Specific rate claims must be substantiated and match landing page availability; should include indicator that terms apply.",
+      "suggested_rewrite": "Open a high-yield savings account today — up to 5% APY*, FDIC insured (*terms apply)"
     }
   ]
 }
 ```
 
-## Policies covered
+### Likely Violation
 
-| ID | Platform | Topic |
-|---|---|---|
-| `google-prohibited-content` | Google | Counterfeit goods, dangerous products, adult content |
-| `google-prohibited-practices` | Google | Data collection, misrepresentation, malicious software |
-| `google-restricted-content` | Google | Healthcare, alcohol, gambling, financial services |
-| `google-editorial` | Google | Grammar, superlatives, punctuation, capitalisation |
-| `microsoft-disallowed-content` | Microsoft | Illegal products, misleading claims, offensive content |
-| `microsoft-relevance-quality` | Microsoft | Ad relevance, landing-page quality, deceptive tactics |
+```bash
+$ python main.py check --ad "Buy cheap Xanax without a prescription — shipped overnight" \
+    --json-out
+```
 
-## Architecture
+```json
+{
+  "overall_verdict": "likely_violation",
+  "summary": "This ad violates Google and Microsoft policies by promoting the sale of prescription drugs without authorization and encouraging users to bypass legal prescription requirements.",
+  "issues": [
+    {
+      "policy": "google-prohibited-content",
+      "offending_text": "Buy cheap Xanax without a prescription",
+      "severity": "high",
+      "explanation": "Google prohibits ads that facilitate the sale of prescription drugs without proper authorization; Xanax is a Schedule IV controlled substance requiring a prescription.",
+      "suggested_rewrite": "This ad cannot be made compliant — Xanax requires a valid prescription and online pharmacies must be LegitScript-certified to advertise on Google."
+    },
+    {
+      "policy": "microsoft-disallowed-content",
+      "offending_text": "Buy cheap Xanax without a prescription",
+      "severity": "high",
+      "explanation": "Microsoft prohibits ads for products illegal in the targeted location; selling prescription medications without a prescription is illegal in all jurisdictions.",
+      "suggested_rewrite": "This ad cannot be made compliant — selling prescription drugs without a prescription violates federal and state pharmacy laws."
+    }
+  ]
+}
+```
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the full design document.
+---
+
+## Batch Mode
+
+Review an entire campaign CSV in one command:
+
+```bash
+python main.py batch --input examples/sample_ads.csv --output results.csv
+
+# Test on the first 3 rows before running the full file
+python main.py batch --input examples/sample_ads.csv --output results.csv --limit 3
+```
+
+Input CSV columns: `ad`, `keyword`, `landing_page` (any may be empty per row). Output columns: `verdict`, `summary`, `issue_count`, `issues_json`, `error`.
+
+See [`examples/sample_ads.csv`](examples/sample_ads.csv) for a starter set that covers all three verdict tiers.
+
+---
+
+## What I Learned
+
+**Curating policies locally worked better instead of website scrapping.** 
+My first version scrapped Google's and Microsoft's policy pages on every run, but those pages load their content with JavaScript, so all I got back was menu text. Switching to a small folder of markdown summaries manually curated based on the official policy content pages made the agent functional, at the cost of needing to refresh them when policies change.
+
+**Tool descriptions mattered more than the system prompt.** Sheriff kept skipping policies it decided weren't relevant until I rewrote the `fetch_policy_page` description to say "call this before making any judgment" and list the six policies explicitly. 
+
+**Structured JSON output made everything else easier.** Defining structured response output helped the agent to return a fixed schema. This meant I can pipe results into Slack or a dashboard later.
+
+**Start with single-ad mode before batch mode.** Validating Sheriff's judgment on one ad at a time allowed me to test agent reasoning end to end fully before building the batch mode support.
+
+---
+
+## Future Work
+
+- Add Meta and TikTok ad policies to the corpus
+- Image and video ad review (multimodal input)
+- Google Ads API integration — pull live campaigns directly instead of requiring a CSV export
+- Concurrent batch processing to cut review time on large files
+- Confidence scores alongside severity to surface "probably fine but worth a human look" cases
+- Slack / webhook integration to pipe violation alerts into existing review workflows
+
+---
+
+## Tech Stack
+
+Python · Anthropic Claude Sonnet (claude-sonnet-4-5) · Claude tool-use API · Click · Rich · BeautifulSoup · python-dotenv
