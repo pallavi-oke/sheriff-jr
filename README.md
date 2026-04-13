@@ -1,7 +1,7 @@
 # PolicyPilot — An agentic ad compliance reviewer built with Claude
 
 ![PolicyPilot demo single ad mode](docs/demo_sheriff_jr.gif)
-![PolicyPilot demo batch mode](docs/demo_policypilot.gif)
+![PolicyPilot demo batch mode](docs/demo_policypilot_full.gif)
 
 
 ---
