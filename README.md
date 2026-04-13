@@ -1,7 +1,7 @@
-# Sheriff Jr. — An agentic ad compliance reviewer built with Claude
+# PolicyPilot — An agentic ad compliance reviewer built with Claude
 
-![Sheriff Jr. demo single ad mode](docs/demo_sheriff_jr.gif)
-![Sheriff Jr. demo batch mode](docs/demo_sheriff_batch.gif)
+![PolicyPilot demo single ad mode](docs/demo_sheriff_jr.gif)
+![PolicyPilot demo batch mode](docs/demo_policypilot.gif)
 
 
 ---
@@ -10,7 +10,7 @@
 
 Performance marketing teams bid on thousands of keywords daily — each one needs to be vetted against Google Ads and Microsoft Advertising policies that change without notice and differ across content categories. Manual review is slow, inconsistent, and impossible to scale. A keyword that was clean last quarter can become a policy violation today, and a disapproved ad wastes budget and tanks Quality Score while you wait for a human reviewer to tell you why.
 
-Sheriff Jr. is the tool I built to automate that loop: give it an ad, a keyword, or a landing page URL, and it reads the actual current policy documents before deciding whether there's a problem.
+PolicyPilot is the tool I built to automate that loop: give it an ad, a keyword, or a landing page URL, and it reads the actual current policy documents before deciding whether there's a problem.
 
 ---
 
@@ -49,7 +49,7 @@ Running compliance review…
 
 ---
 
-## What Sheriff Does
+## What PolicyPilot Does
 
 - Reviews ad copy, keywords, and landing page URLs — any combination of the three
 - Fetches all six Google Ads and Microsoft Advertising policy documents on every run — never relies on cached or stale knowledge
