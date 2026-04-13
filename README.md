@@ -203,11 +203,11 @@ See [`examples/sample_ads.csv`](examples/sample_ads.csv) for a starter set that 
 **Curating policies locally worked better instead of website scrapping.** 
 My first version scrapped Google's and Microsoft's policy pages on every run, but those pages load their content with JavaScript, so all I got back was menu text. Switching to a small folder of markdown summaries manually curated based on the official policy content pages made the agent functional, at the cost of needing to refresh them when policies change.
 
-**Tool descriptions mattered more than the system prompt.** Sheriff kept skipping policies it decided weren't relevant until I rewrote the `fetch_policy_page` description to say "call this before making any judgment" and list the six policies explicitly. 
+**Tool descriptions mattered more than the system prompt.** PolicyPilot kept skipping policies it decided weren't relevant until I rewrote the `fetch_policy_page` description to say "call this before making any judgment" and list the six policies explicitly. 
 
 **Structured JSON output made everything else easier.** Defining structured response output helped the agent to return a fixed schema. This meant I can pipe results into Slack or a dashboard later.
 
-**Start with single-ad mode before batch mode.** Validating Sheriff's judgment on one ad at a time allowed me to test agent reasoning end to end fully before building the batch mode support.
+**Start with single-ad mode before batch mode.** Validating PolicyPilot's judgment on one ad at a time allowed me to test agent reasoning end to end fully before building the batch mode support.
 
 ---
 
